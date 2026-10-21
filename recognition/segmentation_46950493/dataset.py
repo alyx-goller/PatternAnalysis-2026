@@ -1,21 +1,51 @@
+from pathlib import Path
+import numpy as np
 import torch
-import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
-import time
+from torch.utils.data import DataLoader
+
+root = Path("/Users/alyxgoller/Desktop/COMP3710/HipMRI_data")   
+
+def get_paths(folder):
+    return sorted(Path(folder).glob("*.nii*"))
+
+train_imgs = get_paths(root / "train_imgs")      # folder names: change to yours
+train_labs = get_paths(root / "train_seg_labels")
+val_imgs   = get_paths(root / "validate_imgs")
+val_labs   = get_paths(root / "validate_seg_labels")
+test_imgs  = get_paths(root / "test_imgs")
+test_labs  = get_paths(root / "test_seg_labels")
+
+# Sanity check: images and labels must pair up
+for imgs, labs in [(train_imgs, train_labs), (val_imgs, val_labs), (test_imgs, test_labs)]:
+    assert len(imgs) == len(labs), (len(imgs), len(labs))
+    for i, l in list(zip(imgs, labs))[:3]:
+        print(i.name, "<->", l.name)
+
+#working : 21/10
+
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if not torch.cuda.is_available():
     print("Warning CUDA not Found. Using CPU")
 
-import numpy as np
-import nibabel as nib
-from tqdm import tqdm
+
+
+def load_slice(path):
+    """Load one NIfTI file as a 2D float32 array (H, W).
+       Return: The single image as an array
+    """
+    arr = nib.load(str(path)).get_fdata(caching="unchanged")
+    #if 3D only keep first slice
+    if arr.ndim == 3:
+        arr = arr[:, :, 0]          # keep first slice if file is 3D
+    return arr.astype(np.float32)
+
+
 
 #turns label images into their binary masks -
 #returned array is channel x (array/image shape) - one mask per channel showing
-#the 1's ratio of where the channel is present in the image (0's everywhere else)
+#the 1's portion of where the channel(channel = identified feature like prostate) is present in the image (0's everywhere else)
 #(channel = each of distinct object in image (label has already segmented))
 """
 For example, a mask with background label `0` and prostate label `1`
