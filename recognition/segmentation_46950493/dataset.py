@@ -1,34 +1,57 @@
 from pathlib import Path
+import os
 import numpy as np
+import nibabel as nib
 import torch
-from torch.utils.data import DataLoader
-
-root = Path("/Users/alyxgoller/Desktop/COMP3710/HipMRI_data")   
-
-def get_paths(folder):
-    return sorted(Path(folder).glob("*.nii*"))
-
-train_imgs = get_paths(root / "train_imgs")      # folder names: change to yours
-train_labs = get_paths(root / "train_seg_labels")
-val_imgs   = get_paths(root / "validate_imgs")
-val_labs   = get_paths(root / "validate_seg_labels")
-test_imgs  = get_paths(root / "test_imgs")
-test_labs  = get_paths(root / "test_seg_labels")
-
-# Sanity check: images and labels must pair up
-for imgs, labs in [(train_imgs, train_labs), (val_imgs, val_labs), (test_imgs, test_labs)]:
-    assert len(imgs) == len(labs), (len(imgs), len(labs))
-    for i, l in list(zip(imgs, labs))[:3]:
-        print(i.name, "<->", l.name)
-
-#working : 21/10
+from torch.utils.data import Dataset, DataLoader
 
 
-# Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if not torch.cuda.is_available():
-    print("Warning CUDA not Found. Using CPU")
+"""
+    Load dataset from hard coded file (either RANGPUR HPC cluster files or my own local files)
+    Sort data into test_loader, val_loader, test_loader with labels matched to them within a HipMRIDataset - a class of inheritance torch Dataset
+    The sorted data is of type DataLoaders -  includes batching, shuffling, and multi-process data loading. 
+    batch_size = 16, only training data is shuffled
 
+    Last Confirmed data size and num of clases in labels:
+    Label values: [0, 1, 2, 3, 4, 5]
+    imgs -> torch.Size([16, 1, 256, 128]), labels -> torch.Size([16, 6, 256, 128])
+    (B, C, H, W)   -images have 1 x channel since they are of greyscale. 
+
+"""
+
+
+class HipMRIDataset(Dataset):
+    """
+    Store the image paths and corresponding label paths along with the (max) number of classes within the given labels 
+    """
+    def __init__(self, image_paths, label_paths, num_classes):
+        assert len(image_paths) == len(label_paths)
+        self.image_paths = image_paths
+        self.label_paths = label_paths
+        self.num_classes = num_classes
+
+    """Out: how many slices are in this dataset. The DataLoader uses this to know when an epoch ends."""
+    def __len__(self):
+        return len(self.image_paths)
+
+    """
+    In: Given an index:
+    Return: the pair of (image, label) for slice at index
+            image is shape (1, H, W)
+            label is shape (C, H, W) -> C = num_classes, after one-hot encoding (every segmentation class has its own channel)
+    """
+    def __getitem__(self, idx):
+        img = load_slice(self.image_paths[idx])
+        #normalize slice
+        img = (img - img.mean()) / (img.std() + 1e-8)   # z-score per slice
+        #add third dimension to match label shape
+        img = torch.from_numpy(img).unsqueeze(0)        # (1, H, W)
+
+        lab = load_slice(self.label_paths[idx]).astype(np.int64)  # segmented matrix of classes, values converted to integers
+        lab = torch.from_numpy(lab)    #convert to tensor -> (H, W)
+        onehot = torch.nn.functional.one_hot(lab, self.num_classes)  # (H, W, C)
+        onehot = onehot.permute(2, 0, 1).float()  #changes order from (H,W,C) to (C, H, W) for pytorch compatability. Also turn back to floats
+        return img, onehot
 
 
 def load_slice(path):
@@ -38,98 +61,65 @@ def load_slice(path):
     arr = nib.load(str(path)).get_fdata(caching="unchanged")
     #if 3D only keep first slice
     if arr.ndim == 3:
-        arr = arr[:, :, 0]          # keep first slice if file is 3D
+        arr = arr[:, :, 0]       
     return arr.astype(np.float32)
 
 
+def get_path_pairs(img_folder, lab_folder):
+    imgs = sorted(Path(img_folder).glob("*.nii.gz"))
+    labs = sorted(Path(lab_folder).glob("*.nii.gz"))
 
-#turns label images into their binary masks -
-#returned array is channel x (array/image shape) - one mask per channel showing
-#the 1's portion of where the channel(channel = identified feature like prostate) is present in the image (0's everywhere else)
-#(channel = each of distinct object in image (label has already segmented))
-"""
-For example, a mask with background label `0` and prostate label `1`
-becomes two channels: one marking background pixels, one marking prostate pixels.
-"""
-def to_channels(arr: np.ndarray, dtype=np.uint8) -> np.ndarray:
-    labels = np.unique(arr)
-    result = np.zeros(arr.shape + (len(labels),), dtype=dtype)
+    assert len(imgs) == len(labs), f"{len(imgs)} images but {len(labs)} labels"
 
-    for channel, label in enumerate(labels):
-        result[..., channel] = (arr == label)
+    # Check every image name matches its label name: case_035_... vs seg_035_...
+    for i, l in zip(imgs, labs):
+        if i.name.replace("case_", "", 1) != l.name.replace("seg_", "", 1):
+            raise ValueError(f"Mismatch: {i} vs {l}")
 
-    return result
+    return imgs, labs
 
-#reads every file path in list given
-"""
-With `normImage=True`, it z-score normalizes each image.
- With `categorical=True`,it converts the input into label channels.
- With `getAffines=True`, it also returns spatial affine matrices.
- With `early_stop=True`, it stops early, leaving the unused preallocated entries as zeros
-"""
-def load_data_2D(
-    imageNames,
-    normImage=False,
-    categorical=False,
-    dtype=np.float32,
-    getAffines=False,
-    early_stop=False,
-):
-    """
-    Load medical images from the provided filenames into a batch.
+root = Path("/Users/alyxgoller/Desktop/COMP3710/HipMRI_data")   
 
-    If a NIfTI file is 3D, only its first slice is used. The output is
-    pre-allocated for Conv2D input.
+train_imgs, train_labs = get_path_pairs(root / "train_imgs", root / "train_seg_labels")
+val_imgs,   val_labs   = get_path_pairs(root / "validate_imgs",   root / "validate_seg_labels")
+test_imgs,  test_labs  = get_path_pairs(root / "test_imgs",  root / "test_seg_labels")
 
-    normImage: z-score normalize each image.
-    early_stop: stop loading after the first 22 images.
-    """
-    #loading image from voxel to real world space coordinates
-    affines = []
-    #number of images
-    num = len(imageNames)
+# Sanity check: images and labels must pair up
+for imgs, labs in [(train_imgs, train_labs), (val_imgs, val_labs), (test_imgs, test_labs)]:
+    assert len(imgs) == len(labs), (len(imgs), len(labs))
+    for i, l in list(zip(imgs, labs))[:3]:
+        print(i.name, "<->", l.name)
 
 
-    first_case = nib.load(imageNames[0]).get_fdata(caching="unchanged")
-    if first_case.ndim == 3:
-        first_case = first_case[:, :, 0]
+# --- Configuring data loaders ---
 
-    #if this is conversion to labels, get one hot encoded mask (to_channels)
-    if categorical:
-        first_case = to_channels(first_case, dtype=dtype)
-        rows, cols, channels = first_case.shape
-        images = np.zeros((num, rows, cols, channels), dtype=dtype)
-    else:
-        rows, cols = first_case.shape
-        images = np.zeros((num, rows, cols), dtype=dtype)
+# Device configuration
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if not torch.cuda.is_available():
+    print("Warning CUDA not Found. Using CPU")
 
-    for i, inName in enumerate(tqdm(imageNames)):
-        nifti_image = nib.load(inName)
-        inImage = nifti_image.get_fdata(caching="unchanged")
-        affine = nifti_image.affine
 
-        if inImage.ndim == 3:
-            inImage = inImage[:, :, 0]
+# Obtain number of classes form labels: scan every label file once, across all three sets
+classes = set()
+for p in train_labs + val_labs + test_labs:
+    #this line extracts all class values from given path p -> converts to regular list in int form -> adds all unique classes to the set
+    classes.update(np.unique(load_slice(p)).astype(int).tolist())
+print("Label values:", sorted(classes))
+NUM_CLASSES = max(classes) + 1 # get max value and add 1 to account for the zero index. eg [0...5] -> max = 5, +1 = 6 (0,1,2,3,4,5) 6 indexes.
 
-        inImage = inImage.astype(dtype)
+# set up class objects for each model section
+train_ds = HipMRIDataset(train_imgs, train_labs, NUM_CLASSES)
+val_ds   = HipMRIDataset(val_imgs,   val_labs,   NUM_CLASSES)
+test_ds  = HipMRIDataset(test_imgs,  test_labs,  NUM_CLASSES)
 
-        if normImage:
-            inImage = (inImage - inImage.mean()) / (inImage.std() + 1e-8)
+# create dataloaders for each model section
+train_loader = DataLoader(train_ds, batch_size=16, shuffle=True)
+val_loader   = DataLoader(val_ds,   batch_size=16, shuffle=False)
+test_loader  = DataLoader(test_ds,  batch_size=16, shuffle=False)
 
-        if categorical:
-            inImage = to_channels(inImage, dtype=dtype)
-            images[i, :, :, :] = inImage
-        else:
-            images[i, :, :] = inImage
-
-        affines.append(affine)
-
-        if i > 20 and early_stop:
-            break
-
-    if getAffines:
-        return images, affines
+x, y = next(iter(train_loader))
+print(x.shape, y.shape)
 
 
 
-    return images
+
