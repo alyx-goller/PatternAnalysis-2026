@@ -13,10 +13,7 @@ C = num of channels
 H = height
 W = width
 
-
 """
-
-
 
 
 
@@ -134,11 +131,11 @@ class UNet2D(nn.Module):
 
         # four upsample steps (levels 3,2,1,0 in 0-indexed terms)
         self.up_sample = nn.ModuleList(
-            [UpsampleModule(f[l + 1], f[l]) for l in reversed(range(levels - 1))])
+            [UpsamplingBlock(f[l + 1], f[l]) for l in reversed(range(levels - 1))])
 
         # localization modules for the first three steps only (levels 3,2,1)
         self.localize = nn.ModuleList(
-            [LocalizationModule(2 * f[l], f[l]) for l in reversed(range(1, levels - 1))])
+            [LocalizationBlock(2 * f[l], f[l]) for l in reversed(range(1, levels - 1))])
 
         # the last step is a plain 3x3 conv on the concatenated 2*f[0] channels
         self.final_conv = ConvNormAct(2 * f[0], 2 * f[0], 3)
@@ -160,7 +157,7 @@ class UNet2D(nn.Module):
 
         #process all levels of encoding and downsampling - storing skips
         for l in range(1, self.levels):
-            x = self.enc[l](self.down_sample[l - 1](x))
+            x = self.encode[l](self.down_sample[l - 1](x))
             skips.append(x)
 
         # ---- decoder: from the bottom level back up to level 0
@@ -217,11 +214,11 @@ class DiceLoss(nn.Module):
         dice_per_class = []
         for k in range(num_classes):            # k = 0, 1, ..., 5
             p = probs[:, k]                     # class k's probability map, (N, H, W)
-            t = target[:, k]                    # class k's true mask (0s and 1s), (N, H, W)
+            t = targets[:, k]                    # class k's true mask (0s and 1s), (N, H, W)
 
             overlap = (p * t).sum()             # intersect: how much predicted probability lands on true pixels
             total = p.sum() + t.sum()           # predicted amount + true amount
-            dice_k = (2 * overlap + self.eps) / (total + self.eps)
+            dice_k = (2 * overlap + self.epsilon) / (total + self.epsilon)
             dice_per_class.append(dice_k)
 
         mean_dice = torch.stack(dice_per_class).mean()
@@ -232,7 +229,7 @@ For measuring performance validation
 Return: summary of intersect total of true and predicted for each class - breakdown of diceloss contributors seperated by class
 """
 @torch.no_grad()
-def dice_counts(logits, target):
+def dice_counts(logits, targets):
     predicted_class = logits.argmax(dim=1)      # (N, H, W): picks the highest-scoring class at each pixel
     num_classes = logits.shape[1]
     
@@ -240,7 +237,7 @@ def dice_counts(logits, target):
     totals = []
     for k in range(num_classes):
         pred_k = (predicted_class == k).float() # 1 where we predicted class k, else 0
-        true_k = target[:, k]                   # 1 where the truth is class k, else 0
+        true_k = targets[:, k]                   # 1 where the truth is class k, else 0
 
         overlaps.append((pred_k * true_k).sum())
         totals.append(pred_k.sum() + true_k.sum())
