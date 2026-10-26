@@ -79,7 +79,7 @@ def get_path_pairs(img_folder, lab_folder):
     return imgs, labs
 
 NUM_CLASSES = 6          # label ids 0-5, confirmed earlier
-PROSTATE_CLASS = 5       # PLACEHOLDER: set to the real prostate id
+PROSTATE_CLASS = 5       #predicted from personal tests
 
 
 def get_dataloaders(root, batch_size=16, num_workers=0, verbose=True):
