@@ -78,47 +78,72 @@ def get_path_pairs(img_folder, lab_folder):
 
     return imgs, labs
 
-root = Path("/Users/alyxgoller/Desktop/COMP3710/HipMRI_data")   
-
-train_imgs, train_labs = get_path_pairs(root / "train_imgs", root / "train_seg_labels")
-val_imgs,   val_labs   = get_path_pairs(root / "validate_imgs",   root / "validate_seg_labels")
-test_imgs,  test_labs  = get_path_pairs(root / "test_imgs",  root / "test_seg_labels")
-
-# Sanity check: images and labels must pair up
-for imgs, labs in [(train_imgs, train_labs), (val_imgs, val_labs), (test_imgs, test_labs)]:
-    assert len(imgs) == len(labs), (len(imgs), len(labs))
-    for i, l in list(zip(imgs, labs))[:3]:
-        print(i.name, "<->", l.name)
+NUM_CLASSES = 6          # label ids 0-5, confirmed earlier
+PROSTATE_CLASS = 5       # PLACEHOLDER: set to the real prostate id
 
 
-# --- Configuring data loaders ---
+def get_dataloaders(root, batch_size=16, num_workers=0, verbose=True):
+    """Build the train / validation / test DataLoaders.
+    root: the folder that contains the six data folders."""
+    root = Path(root)
 
-# Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if not torch.cuda.is_available():
-    print("Warning CUDA not Found. Using CPU")
+    train_imgs, train_labs = get_path_pairs(root / "train_imgs", root / "train_seg_labels")
+    val_imgs,   val_labs   = get_path_pairs(root / "validate_imgs", root / "validate_seg_labels")
+    test_imgs,  test_labs  = get_path_pairs(root / "test_imgs", root / "test_seg_labels")
+
+    if verbose:
+        print(f"slices: train {len(train_imgs)}, val {len(val_imgs)}, test {len(test_imgs)}")
+        for i, l in list(zip(train_imgs, train_labs))[:3]:
+            print(i.name, "<->", l.name)
+
+    train_ds = HipMRIDataset(train_imgs, train_labs, NUM_CLASSES)
+    val_ds   = HipMRIDataset(val_imgs,   val_labs,   NUM_CLASSES)
+    test_ds  = HipMRIDataset(test_imgs,  test_labs,  NUM_CLASSES)
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=num_workers)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    return train_loader, val_loader, test_loader
 
 
-# Obtain number of classes form labels: scan every label file once, across all three sets
-classes = set()
-for p in train_labs + val_labs + test_labs:
-    #this line extracts all class values from given path p -> converts to regular list in int form -> adds all unique classes to the set
-    classes.update(np.unique(load_slice(p)).astype(int).tolist())
-print("Label values:", sorted(classes))
-NUM_CLASSES = max(classes) + 1 # get max value and add 1 to account for the zero index. eg [0...5] -> max = 5, +1 = 6 (0,1,2,3,4,5) 6 indexes.
 
-# set up class objects for each model section
-train_ds = HipMRIDataset(train_imgs, train_labs, NUM_CLASSES)
-val_ds   = HipMRIDataset(val_imgs,   val_labs,   NUM_CLASSES)
-test_ds  = HipMRIDataset(test_imgs,  test_labs,  NUM_CLASSES)
+# root = Path("/Users/alyxgoller/data/HipMRI_data")   
 
-# create dataloaders for each model section
-train_loader = DataLoader(train_ds, batch_size=16, shuffle=True)
-val_loader   = DataLoader(val_ds,   batch_size=16, shuffle=False)
-test_loader  = DataLoader(test_ds,  batch_size=16, shuffle=False)
+# train_imgs, train_labs = get_path_pairs(root / "train_imgs", root / "train_seg_labels")
+# val_imgs,   val_labs   = get_path_pairs(root / "validate_imgs",   root / "validate_seg_labels")
+# test_imgs,  test_labs  = get_path_pairs(root / "test_imgs",  root / "test_seg_labels")
 
-x, y = next(iter(train_loader))
-print(x.shape, y.shape)
+# # Sanity check: images and labels must pair up
+# for imgs, labs in [(train_imgs, train_labs), (val_imgs, val_labs), (test_imgs, test_labs)]:
+#     assert len(imgs) == len(labs), (len(imgs), len(labs))
+#     for i, l in list(zip(imgs, labs))[:3]:
+#         print(i.name, "<->", l.name)
+
+
+# # --- Configuring data loaders ---
+
+# # Device configuration
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# if not torch.cuda.is_available():
+#     print("Warning CUDA not Found. Using CPU")
+
+
+# # Obtain number of classes form labels: scan every label file once, across all three sets
+# NUM_CLASSES = 6        # label ids 0-5, confirmed earlier
+# PROSTATE_CLASS = 1     # PLACEHOLDER: set to the real prostate id
+
+
+# # set up class objects for each model section
+# train_ds = HipMRIDataset(train_imgs, train_labs, NUM_CLASSES)
+# val_ds   = HipMRIDataset(val_imgs,   val_labs,   NUM_CLASSES)
+# test_ds  = HipMRIDataset(test_imgs,  test_labs,  NUM_CLASSES)
+
+# # create dataloaders for each model section
+# train_loader = DataLoader(train_ds, batch_size=16, shuffle=True)
+# val_loader   = DataLoader(val_ds,   batch_size=16, shuffle=False)
+# test_loader  = DataLoader(test_ds,  batch_size=16, shuffle=False)
+
+
 
 
 
