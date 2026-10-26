@@ -7,6 +7,12 @@ import torch.nn.functional as F #funcs that don't manage internal learnable weig
 InstanceNorm =
 It normalizes the input per channel and per instance (in batch) by subtracting its mean and dividing by its standard deviation, then applies weights and biases.
 
+input data = (N, C, H, W)
+N = batch size
+C = num of channels
+H = height
+W = width
+
 
 """
 
@@ -177,6 +183,67 @@ class UNet2D(nn.Module):
         return out
 
 
+"""
+Input: epsilon - added to top and bottom of dice function - safeguard against dividing by zero
 
+Dice Loss function per batch:
+Pros:
 
+Stability where classes less present - if class is not there or close to zero, it won't sway loss
+(in turn learning weights) as much as an individual image
+simplicity - one number per batch
+less noise - hard to distinguish images won't swing loss completely
+
+Consequences: Network isnt trained to get images correct independently:
+
+Slices with lots of prostate count for more than slices with a little, so small or faint cases can get less attention.
+A small or unlucky batch can have very little prostate in it, which makes the loss less reliable.
+
+"""
+class DiceLoss(nn.Module):
+    def __init__(self, epsilon=1e-5):
+        super().__init__()
+        self.epsilon = epsilon # = a tiny number (1e-5) added to the Dice fraction to avoid dividing by zero
+
+    """
+    logits = raw unnormalized output from decoder
+    target = labels for the batch of images
+    """
+    def forward(self, logits, targets):
+        #convert raw output into class probabilities (with each class probability in its own channel)
+        probs = F.softmax(logits, dim=1)        # (N, 6, H, W) probabilities
+        num_classes = probs.shape[1]
+
+        dice_per_class = []
+        for k in range(num_classes):            # k = 0, 1, ..., 5
+            p = probs[:, k]                     # class k's probability map, (N, H, W)
+            t = target[:, k]                    # class k's true mask (0s and 1s), (N, H, W)
+
+            overlap = (p * t).sum()             # intersect: how much predicted probability lands on true pixels
+            total = p.sum() + t.sum()           # predicted amount + true amount
+            dice_k = (2 * overlap + self.eps) / (total + self.eps)
+            dice_per_class.append(dice_k)
+
+        mean_dice = torch.stack(dice_per_class).mean()
+        return 1 - mean_dice
+
+"""
+For measuring performance validation
+Return: summary of intersect total of true and predicted for each class - breakdown of diceloss contributors seperated by class
+"""
+@torch.no_grad()
+def dice_counts(logits, target):
+    predicted_class = logits.argmax(dim=1)      # (N, H, W): picks the highest-scoring class at each pixel
+    num_classes = logits.shape[1]
+    
+    overlaps = []
+    totals = []
+    for k in range(num_classes):
+        pred_k = (predicted_class == k).float() # 1 where we predicted class k, else 0
+        true_k = target[:, k]                   # 1 where the truth is class k, else 0
+
+        overlaps.append((pred_k * true_k).sum())
+        totals.append(pred_k.sum() + true_k.sum())
+
+    return torch.stack(overlaps), torch.stack(totals)
 
