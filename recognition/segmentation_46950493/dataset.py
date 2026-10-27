@@ -87,9 +87,9 @@ def get_dataloaders(root, batch_size=16, num_workers=0, verbose=True):
     root: the folder that contains the six data folders."""
     root = Path(root)
 
-    train_imgs, train_labs = get_path_pairs(root / "train_imgs", root / "train_seg_labels")
-    val_imgs,   val_labs   = get_path_pairs(root / "validate_imgs", root / "validate_seg_labels")
-    test_imgs,  test_labs  = get_path_pairs(root / "test_imgs", root / "test_seg_labels")
+    train_imgs, train_labs = get_path_pairs(root / "keras_slices_train", root / "keras_slices_seg_train")
+    val_imgs,   val_labs   = get_path_pairs(root / "keras_slices_validate", root / "keras_slices_seg_validate")
+    test_imgs,  test_labs  = get_path_pairs(root / "keras_slices_test", root / "keras_slices_seg_test")
 
     if verbose:
         print(f"slices: train {len(train_imgs)}, val {len(val_imgs)}, test {len(test_imgs)}")

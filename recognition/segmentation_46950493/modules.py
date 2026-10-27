@@ -126,7 +126,8 @@ class UNet2D(nn.Module):
         
 
         # ---- decoder (localization pathway); decoder[i] works on level levels-2-i ----
-        #(up_sample -> concat (torch) -> localize decoder) x3 + (up_sample -> concat skip -> 3x3 ConvNormAct) 
+        #(up_sample -> concat (torch) -> localize decoder) x3 
+        #  + (up_sample -> concat skip -> 3x3 ConvNormAct) 
         #  + (combined segmentaion -> softmax)
 
         # four upsample steps (levels 3,2,1,0 in 0-indexed terms)
@@ -141,9 +142,11 @@ class UNet2D(nn.Module):
         self.final_conv = ConvNormAct(2 * f[0], 2 * f[0], 3)
         
         # ---- segmentation and head interpolating for deep supervision: levels 2, 1, 0 ----
-        """ deep supervision = simplified connections in long layer paths to reduce noise and weaker signals through depths of processing"""
+        """ deep supervision = simplified connections in long layer paths to reduce noise and weaker
+        signals through depths of processing"""
         
-        #number of channels at each segmentation extraction level (2* for the last one since no localization to reduce channels)
+        #number of channels at each segmentation extraction level 
+        #(2* for the last one since no localization to reduce channels)
         head_channels = [2 * f[0], f[1], f[2]]   
         self.seg = nn.ModuleList(
             [nn.Conv2d(c, num_classes, 1) for c in head_channels])
@@ -229,7 +232,7 @@ For measuring performance validation
 Return: summary of intersect total of true and predicted for each class - breakdown of diceloss contributors seperated by class
 """
 @torch.no_grad()
-def dice_counts(logits, targets):
+def dice_counts(logits, target):
     predicted_class = logits.argmax(dim=1)      # (N, H, W): picks the highest-scoring class at each pixel
     num_classes = logits.shape[1]
     
@@ -237,7 +240,7 @@ def dice_counts(logits, targets):
     totals = []
     for k in range(num_classes):
         pred_k = (predicted_class == k).float() # 1 where we predicted class k, else 0
-        true_k = targets[:, k]                   # 1 where the truth is class k, else 0
+        true_k = target[:, k]                   # 1 where the truth is class k, else 0
 
         overlaps.append((pred_k * true_k).sum())
         totals.append(pred_k.sum() + true_k.sum())
