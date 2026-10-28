@@ -2,7 +2,7 @@ import os, sys
 import torch
 from tqdm import tqdm #to help visualise progress
 
-from dataset import get_dataloaders, NUM_CLASSES, PROSTATE_CLASS
+from dataset import get_dataloaders, NUM_CLASSES, PROSTATE_CLASS, pad_collate
 from modules import UNet2D, DiceLoss, dice_counts
 
 # ---- settings ----
@@ -37,6 +37,7 @@ def train_one_epoch(model, loader, criterion, optimizer):
     """
     model.train()  # train flag in nn.module set as TRUE = dropout2D ON
     total = 0.0
+    #iterate through batches of image labels pairs for entire dataset
     for image, label in tqdm(loader, desc="train", leave=False, disable=not sys.stdout.isatty()):
         image, label = image.to(device), label.to(device)
         #Forward Pass
@@ -57,10 +58,11 @@ def train_one_epoch(model, loader, criterion, optimizer):
 # Validate: check training progress
 @torch.no_grad()
 def validate(model, loader, criterion):
-    model.eval()                                   # dropout OFF
+    model.eval() ## train flag in nn.module set as FALSE = dropout2D OFF
     total = 0.0
     inter = torch.zeros(NUM_CLASSES, device=device)
     denom = torch.zeros(NUM_CLASSES, device=device)
+    #iterate through batches of image labels pairs for entire dataset
     for image, label in tqdm(loader, desc="val", leave=False, disable=not sys.stdout.isatty()):
         image, label = image.to(device), label.to(device)
 
@@ -134,7 +136,7 @@ def initial_test(n_train=2000, n_val=400, epochs=50, max_minutes=15, workers=4, 
     def subset(loader, n, shuffle):
         ds = loader.dataset
         idx = torch.randperm(len(ds), generator=g)[:min(n, len(ds))].tolist()
-        return DataLoader(Subset(ds, idx), batch_size=batch_size, shuffle=shuffle, num_workers=workers)
+        return DataLoader(Subset(ds, idx), batch_size=batch_size, shuffle=shuffle, num_workers=workers, collate_fn=pad_collate)
 
     train_loader = subset(train_loader, n_train, True)
     val_loader = subset(val_loader, n_val, False)
