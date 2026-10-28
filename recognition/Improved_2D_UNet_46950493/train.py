@@ -8,7 +8,7 @@ from modules import UNet2D, DiceLoss, dice_counts
 # ---- settings ----
 ROOT = os.environ.get("HIPMRI_ROOT", "/Users/alyxgoller/data/HipMRI_data")  #changes per machine
 BATCH_SIZE = 16
-NUM_EPOCHS = 100 #upper limit or time out
+NUM_EPOCHS = 20 
 LR = 5e-4
 WEIGHT_DECAY = 1e-5
 LR_DECAY = 0.985                       # lr = LR * LR_DECAY ** epoch (paper)
@@ -81,6 +81,7 @@ def validate(model, loader, criterion):
 
 
 def main():
+    # --fetch data--
     train_loader, val_loader, _ = get_dataloaders(ROOT, batch_size=BATCH_SIZE)
 
     
