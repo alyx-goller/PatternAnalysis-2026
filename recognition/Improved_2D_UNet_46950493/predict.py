@@ -61,15 +61,15 @@ def general_predict(batch_size = 16):
  
         #determine if best or worst dice score so far & store the best and worst batches for final visualisation
         #(compared on the prostate class only, so each batch gives one number)
-        cur_batch_dice = ((2 * i[PROSTATE_CLASS] + 1e-5) / (u[PROSTATE_CLASS] + 1e-5)).item()
+        cur_batch_dice = ((2 * i[PROSTATE_CLASS] + 1e-5) / (t[PROSTATE_CLASS] + 1e-5)).item()
         if label[:, PROSTATE_CLASS].sum() == 0:
             continue   # a batch with no prostate gives a meaningless score, so it can't be best or worst
         if cur_batch_dice > best_dice:
             best_dice = cur_batch_dice
-            best_batch = (image, label, predicted_mask, i, u)
+            best_batch = (image, label, predicted_mask, i, t)
         if cur_batch_dice < worst_dice:
             worst_dice = cur_batch_dice
-            worst_batch = (image, label, predicted_mask, i, u)
+            worst_batch = (image, label, predicted_mask, i, t)
  
     # -- Reporting --
     ave_dice = (2 * intersection + 1e-5) / (total + 1e-5)
@@ -123,11 +123,11 @@ def pick_slices(batch, title, num_of_slices, prostate):
         Return:
             List of (title, image, true mask, predicted mask)
     """
-    image, label, predicted_mask, i, u = batch
+    image, label, predicted_mask, i, t = batch
     image = image.cpu().numpy()
     true = label.argmax(dim=1).cpu().numpy()             # one-hot channels -> one class number per pixel
     pred = predicted_mask.argmax(dim=1).cpu().numpy()    # highest scoring class per pixel
-    batch_dice = ((2 * i[PROSTATE_CLASS] + 1e-5) / (u[PROSTATE_CLASS] + 1e-5)).item()
+    batch_dice = ((2 * i[PROSTATE_CLASS] + 1e-5) / (t[PROSTATE_CLASS] + 1e-5)).item()
  
     rows = []
     for s in range(len(image)):
