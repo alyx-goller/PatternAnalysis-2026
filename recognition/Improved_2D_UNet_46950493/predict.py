@@ -22,7 +22,7 @@ if device.type == "cpu":
     print("Warning: CUDA not found. Using CPU")
 
 @torch.no_grad()
-def general_predict(batch_size = 16):
+def general_predict(batch_size = 1):
     """
     Main test function for segmenting images and evaluating performance and cost
     
@@ -315,7 +315,7 @@ def visualise(best_batch, worst_batch, num_of_slices = 3, prostate = True):
  
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "imbalance":   # python predict.py imbalance
-        imbalance_test()
+        imbalance_test(60, indexes = {"BEST": 1, "MAX PROSTATE": 20, "BASE": 50})
     else:
-        general_predict(batch_size=16)
+        general_predict(batch_size=1)
  
