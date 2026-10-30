@@ -309,6 +309,14 @@ segmentation,” in Proc. MICCAI, 2015, pp. 234–241.
 [2] F. Isensee, P. Kickingereder, W. Wick, M. Bendszus, and K. H. Maier-Hein, “Brain tumor
 segmentation and radiomics survival prediction: Contribution to the BRATS 2017 challenge,” in
 Brainlesion: Glioma, Multiple Sclerosis, Stroke and TBI Models, 2018, pp. 287–297.
+
+## Artificial Intelligence Usage Disclosure
+  
+Claude (Sonnet 5.5) was used for scaffolding of dataset.py, train.py and modules.py. All functions were editted and understood by myself and personalized to my own needs for the task. It was also used to generate the visualization functions in predict.py and help scaffold the imbalance test. Overall, I used the AI to help build my understanding of converting lecture content into code, no line of code was unread and any section that I did not understand, I took the time to learn, comment my understanding and/or change to a format which I clearly understood.
+
+ChatGPT was also used in some text formatting and editting for the README file. 
+
+
 ## Appendix
 
 **A.**  
