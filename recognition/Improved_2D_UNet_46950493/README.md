@@ -57,7 +57,7 @@ The end of the encoder block is the bottleneck which includes a fifth and final 
     1x1 ConvNormAct (reduce double channels from concat back to decoder process order)  
   
 **Final Segmentation**  
-:is an interpolation of the final three localization block outputs (deep supervision) to give the final per-pixel class scores, which a softmax turns into probabilities applied in the loss; argmax at prediction  
+is an interpolation of the final three localization block outputs (deep supervision) to give the final per-pixel class scores, which a softmax turns into probabilities applied in the loss; argmax at prediction  
   
 **Loss Function**  
 Training uses a multi-class Dice loss, which weights the small prostate class equally with large background classes, with the Adam optimiser (learning rate 5e-4, decayed by 0.985 per epoch).  
@@ -68,7 +68,7 @@ norm = InstanceNorm
 act = leaky ReLu activation function  
   
 This process is an adaptation of the improved U-Net of Isensee et al. (2017). which follows the following structure:  
-![Improved 2D U-Net architecture](figures/Isensee_unet_structure)
+![Improved 2D U-Net architecture](figures/Isensee_unet_structure.png)
   
   
 ### File Breakdown  
@@ -99,7 +99,7 @@ The prototype is built to compare performance and computational cost to an older
 2.	Runtime of training and validation does not excede 30 seconds per epoch while processing an image range of 1000+ images - this would indicate too large of a runtime for the entire training dataset for this study (approx. 30s * 11.46 = 5.73 minutes per epoch of entire 11460 images).  
 3.	During visualization analysis of input image, ground truth mask and predicted mask, the worst instance of prostate identification does not over or under contour by more than 5% of the total true prostate area. Additionally, no more than 10% of the total pixel areas of the test set may be over-contoured or under-contoured.
 4.	The final prototype meets a minimum target of 0.75 for the average prostate Dice Score over entire test set.  
-  
+
 ### Model Choice & Course Concepts:  
 **The proposed dataset configuration:**  
 Keras slices of HipMRI's are used as the segmentation data for this study. The slices are split into data and matching segmentation labels in seperate files and then further segregated into train, validation and test files to ensure patient level splitting and no leakage between the different model levels of training, validation or testing.  
@@ -118,7 +118,7 @@ Course content created interest in segmentation through lectures and provided su
 ### Preliminary Feasibility Evidence:  
 The following is the output of an initial training test using a subset of the data. The purpose of this preliminary test is to confirm runtime speed with the provided resources, a decreasing loss value at each epoch and to ensure the Dice performance can meet the established target.  
   
-Input: `python train.py quick`
+Input: `python train.py quick`  
 `Quick test: 2000 training slices / 400 validation slices - device: NVIDIA A100-PCIE-40GB`
 `Epoch   1 (13s) | train loss 0.3901 | val loss 0.2714 | prostate Dice 0.6988 | all classes [0.953, 0.921, 0.726, 0.584, 0.569, 0.699]`
   
@@ -234,17 +234,17 @@ After conducting predictions on the test set of images, the best and worst Dice 
 Input: `python predict.py` 
 
 Figure 1.1: Best Dice scoring HipMRI slice from predictions  
-![Best_prediction_slice](figures/Predict_best_540) 
+![Best_prediction_slice](figures/Predict_best_540.png) 
 
 As seen in Figure 1.1, the best prediction occurred during a middle slice (rather than a base or apex) where majority of the classes are present. Class 4, the rectum, which is not depicted in this slice, often collides with prostate pixels, which could increase complexity of segmentation and decrease the Dice score performance. The prostate in this image visually seems to retain its true size, however some shape difference is missed due to under-contouring. As described on the right of the image, the prostate was under-contoured by 5.3% and over-contoured by 4.7%. Although, visually the ground truth and prediction seem quite similar, from a medical analysis point of view, this level of error could have significant consequences if the contouring differences miss vital information or cause a misdiagnosis. 
 
 Figure 1.2: Best Dice scoring HipMRI slice from predictions on patient 1 only (60 slices)  
-![Best_prediction_slice](figures/Predict_best_60) 
+![Best_prediction_slice](figures/Predict_best_60.png) 
 
 Figure 1.2 shows an additional high scoring prostate Dice score image, which was found by running predictions on patient 1's slices only (the first 60 slices in the test set). Class 3 in this image has a 0.1075 descrease in Dice score in comparison to the class's average . This class represents the bladder which is another small portion of the HipMRI. Similar to the prostate the small size may impact the class's segmentation due to a class imbalance and loss of spatial resolution from downsampling. 
 
 Figure 2: Worst Dice scoring HipMRI slice from predictions  
-![Worst_prediction_slice](figures/Predict_worst_540)
+![Worst_prediction_slice](figures/Predict_worst_540.png)
 
 Figure 2, showing the worst prostate Dice score image, occurs at an apex image where only minimal prostate is visible. Although, the prostate prostate visibility here seems insignificant, apex images still provide important medical detail of the 3D shape of the organ. The image shows that the model under-contoured by 100%, meaning the class was not detected at all. This shows how apex (and potentially base) slices can get drastically different scores while middle slices, which may dominate the training and test set (slice imbalance), can change the overall average to be ostensibly accurate. If slices could compare pixels on a 3 dimensional axis, perhaps the model could infer potential prostate pixels based on similar regions in surrounding slices.
 
@@ -254,17 +254,17 @@ Further visualization of HipMRI prediction instances are shown below to analyse 
 Input: `python predict.py imbalance_test(60, indexes = {"APEX": 1, "MAX PROSTATE": 20, "BASE": 59})` 
 
 Figure 3: Apex HipMRI slice prediction    
-![Apex_prediction_slice](figures/Predict_apex) 
+![Apex_prediction_slice](figures/Predict_apex.png) 
 
 Figure 3 presents an example apex HipMRI slice of patient 1 from the test dataset. A class imbalance is represented as class 4 and 5 are not present. On this slice, class 3/the bladder is reletively large in comprison to Figure 1.2; segmented accuracy was maintained to a higher degree here with a dice score of 0.98, however, the 3 dimensional shape will be unaligned when considering this slice along with the one from Figure 1.2 (they are comparable since both slices below to patient 1).
 
 Figure 4: Max Prostate/Middle HipMRI slice prediction     
-![Apex_prediction_slice](figures/Predict_max_prostate)  
+![Apex_prediction_slice](figures/Predict_max_prostate.png)  
   
 Figure 4 displays a middle slice of patient 1 which also has the maximum area of prostate pixels present. All classes score a high to average dice score excluding class 3/the bladder which again follows the same trend seen in Figure 1.2 where its reduced size has caused a drop in score from the average by 0.0795/7.95%. The prostate has a high Dice score in this prediction, however, 13.6% of the true prostate is under-contoured in this prediction. This loss is less likely to derive from a smaller size as it is a larger representation (although it is relatively small compared to other classes). Possible contributing factors include class imbalance, as the prostate occupies a relatively small proportion of the image and others used in training, and loss of fine boundary detail during downsampling. Although U-Net skip connections help recover spatial information by combining high- and low-level features, the decoder may still struggle to reconstruct precise anatomical boundaries.
 
 Figure 5: Base HipMRI slice prediction  
-![Apex_prediction_slice](figures/Predict_base)  
+![Apex_prediction_slice](figures/Predict_base.png)  
 
 Figure 5 shows a base slice for comparison to the apex and middle regions. This is the only one of the three where the rectum/class 4 is present. There is quite a large region covered by this class and the model achieves a 0.9 Dice score in this instance, however, when comparing the prediction image in comparison to the ground truth, the shape is slightly distorted and there is a small outlier pixel region. A the top (right side of the image) there is also leakage of the background into the bone/class 2 region, which is mirrored by the reduction in the dice score by approx. 0.1 compared to class 2's average.
 
